@@ -1,26 +1,29 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { MainLayout } from './components/layout/MainLayout';
+import { AppointmentsPage } from './pages/Appointments';
+
+// Placeholder components - we'll create these next
+const Services = () => <div>Services Page</div>;
+const Staff = () => <div>Staff Page</div>;
+const Clients = () => <div>Clients Page</div>;
+const Settings = () => <div>Settings Page</div>;
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <MainLayout>
+        <Routes>
+          <Route path="/" element={<AppointmentsPage />} />
+          <Route path="/appointments" element={<AppointmentsPage />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/staff" element={<Staff />} />
+          <Route path="/clients" element={<Clients />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </MainLayout>
+    </Router>
   );
 }
 
-export default App;
+export default App; 
