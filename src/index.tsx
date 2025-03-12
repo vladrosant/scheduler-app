@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { theme } from './theme';
+import theme from './theme';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
