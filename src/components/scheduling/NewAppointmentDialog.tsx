@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -8,73 +8,114 @@ import {
   TextField,
   MenuItem,
   Grid,
+  Typography,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { useFormik } from 'formik';
 import * as yup from 'yup';
+import { Service, AppointmentFormValues, StaffMember } from '../../types';
+import { addMinutes, setHours, setMinutes, isBefore, isAfter } from 'date-fns';
 
 interface NewAppointmentDialogProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (values: AppointmentFormValues) => void;
-}
-
-interface AppointmentFormValues {
-  clientName: string;
-  service: string;
-  staffMember: string;
-  date: Date | null;
-  time: Date | null;
-  notes: string;
+  services: Service[];
+  staff: StaffMember[];
+  existingAppointments: { startTime: string; endTime: string; }[];
 }
 
 const validationSchema = yup.object({
   clientName: yup.string().required('Client name is required'),
-  service: yup.string().required('Service is required'),
-  staffMember: yup.string().required('Staff member is required'),
-  date: yup.date().required('Date is required').nullable(),
-  time: yup.date().required('Time is required').nullable(),
+  serviceId: yup.string().required('Service is required'),
+  staffId: yup.string().required('Staff member is required'),
+  date: yup.date().required('Date is required'),
+  time: yup.date().required('Time is required'),
   notes: yup.string(),
 });
 
-// Placeholder data - will be replaced with real data from API
-const services = [
-  { id: '1', name: 'Haircut' },
-  { id: '2', name: 'Beard Trim' },
-  { id: '3', name: 'Hair Color' },
-];
-
-const staffMembers = [
-  { id: '1', name: 'John Smith' },
-  { id: '2', name: 'Sarah Johnson' },
-];
+const BUSINESS_HOURS = {
+  start: 9, // 9 AM
+  end: 17, // 5 PM
+};
 
 export const NewAppointmentDialog: React.FC<NewAppointmentDialogProps> = ({
   open,
   onClose,
   onSubmit,
+  services,
+  staff,
+  existingAppointments,
 }) => {
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+
   const formik = useFormik({
     initialValues: {
       clientName: '',
-      service: '',
-      staffMember: '',
+      serviceId: '',
+      staffId: '',
       date: null,
       time: null,
       notes: '',
     },
-    validationSchema: validationSchema,
+    validationSchema,
     onSubmit: (values) => {
       onSubmit(values);
       onClose();
     },
   });
 
+  useEffect(() => {
+    const service = services.find(s => s.id === formik.values.serviceId);
+    setSelectedService(service || null);
+  }, [formik.values.serviceId, services]);
+
+  const isTimeSlotAvailable = (date: Date): boolean => {
+    if (!date) return false;
+
+    // Check if within business hours
+    const hours = date.getHours();
+    if (hours < BUSINESS_HOURS.start || hours >= BUSINESS_HOURS.end) {
+      return false;
+    }
+
+    // Check if slot overlaps with existing appointments
+    const slotEnd = addMinutes(date, selectedService?.duration || 0);
+    
+    return !existingAppointments.some(appointment => {
+      const appointmentStart = new Date(appointment.startTime);
+      const appointmentEnd = new Date(appointment.endTime);
+      
+      return (
+        (isBefore(date, appointmentEnd) && isAfter(slotEnd, appointmentStart)) ||
+        (isAfter(date, appointmentStart) && isBefore(date, appointmentEnd))
+      );
+    });
+  };
+
+  const getTimePickerMinMax = () => {
+    if (!formik.values.date) return { minTime: null, maxTime: null };
+
+    const selectedDate = formik.values.date;
+    const minTime = setMinutes(setHours(selectedDate, BUSINESS_HOURS.start), 0);
+    const maxTime = setMinutes(
+      setHours(selectedDate, BUSINESS_HOURS.end - (selectedService?.duration || 0) / 60),
+      0
+    );
+
+    return { minTime, maxTime };
+  };
+
+  const { minTime, maxTime } = getTimePickerMinMax();
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <form onSubmit={formik.handleSubmit}>
-        <DialogTitle>New Appointment</DialogTitle>
+        <DialogTitle>Schedule New Appointment</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12}>
@@ -89,49 +130,52 @@ export const NewAppointmentDialog: React.FC<NewAppointmentDialogProps> = ({
                 helperText={formik.touched.clientName && formik.errors.clientName}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                id="service"
-                name="service"
-                select
-                label="Service"
-                value={formik.values.service}
-                onChange={formik.handleChange}
-                error={formik.touched.service && Boolean(formik.errors.service)}
-                helperText={formik.touched.service && formik.errors.service}
-              >
-                {services.map((service) => (
-                  <MenuItem key={service.id} value={service.id}>
-                    {service.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Service</InputLabel>
+                <Select
+                  id="serviceId"
+                  name="serviceId"
+                  value={formik.values.serviceId}
+                  onChange={formik.handleChange}
+                  error={formik.touched.serviceId && Boolean(formik.errors.serviceId)}
+                  label="Service"
+                >
+                  {services.map((service) => (
+                    <MenuItem key={service.id} value={service.id}>
+                      {service.name} - ${service.price}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                id="staffMember"
-                name="staffMember"
-                select
-                label="Staff Member"
-                value={formik.values.staffMember}
-                onChange={formik.handleChange}
-                error={formik.touched.staffMember && Boolean(formik.errors.staffMember)}
-                helperText={formik.touched.staffMember && formik.errors.staffMember}
-              >
-                {staffMembers.map((staff) => (
-                  <MenuItem key={staff.id} value={staff.id}>
-                    {staff.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+            <Grid item xs={12}>
+              <FormControl fullWidth>
+                <InputLabel>Staff Member</InputLabel>
+                <Select
+                  id="staffId"
+                  name="staffId"
+                  value={formik.values.staffId}
+                  onChange={formik.handleChange}
+                  error={formik.touched.staffId && Boolean(formik.errors.staffId)}
+                  label="Staff Member"
+                >
+                  {staff
+                    .filter((member) => member.active)
+                    .map((member) => (
+                      <MenuItem key={member.id} value={member.id}>
+                        {member.name}
+                      </MenuItem>
+                    ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <DatePicker
                 label="Date"
                 value={formik.values.date}
                 onChange={(value) => formik.setFieldValue('date', value)}
+                disablePast
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -146,6 +190,8 @@ export const NewAppointmentDialog: React.FC<NewAppointmentDialogProps> = ({
                 label="Time"
                 value={formik.values.time}
                 onChange={(value) => formik.setFieldValue('time', value)}
+                minTime={minTime}
+                maxTime={maxTime}
                 slotProps={{
                   textField: {
                     fullWidth: true,
@@ -153,8 +199,18 @@ export const NewAppointmentDialog: React.FC<NewAppointmentDialogProps> = ({
                     helperText: formik.touched.time && formik.errors.time,
                   },
                 }}
+                shouldDisableTime={(timeValue: Date | null) => 
+                  timeValue ? !isTimeSlotAvailable(timeValue) : true
+                }
               />
             </Grid>
+            {selectedService && (
+              <Grid item xs={12}>
+                <Typography variant="body2" color="text.secondary">
+                  Duration: {selectedService.duration} minutes
+                </Typography>
+              </Grid>
+            )}
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -162,9 +218,11 @@ export const NewAppointmentDialog: React.FC<NewAppointmentDialogProps> = ({
                 name="notes"
                 label="Notes"
                 multiline
-                rows={4}
+                rows={3}
                 value={formik.values.notes}
                 onChange={formik.handleChange}
+                error={formik.touched.notes && Boolean(formik.errors.notes)}
+                helperText={formik.touched.notes && formik.errors.notes}
               />
             </Grid>
           </Grid>
@@ -172,7 +230,7 @@ export const NewAppointmentDialog: React.FC<NewAppointmentDialogProps> = ({
         <DialogActions>
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="contained" color="primary">
-            Create Appointment
+            Schedule
           </Button>
         </DialogActions>
       </form>
